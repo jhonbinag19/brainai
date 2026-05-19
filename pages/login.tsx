@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   // If already logged in, go straight to chat
   useEffect(() => {
@@ -26,17 +25,22 @@ export default function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
     setLoading(true);
 
     const supabase = getSupabaseClient();
 
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password, emailConfirm: false });
+      const { error } = await supabase.auth.signUp({ email, password });
       if (error) {
         setError(error.message);
       } else {
-        router.replace("/");
+        // Try to immediately sign in — works if email confirmation is disabled
+        const signInError = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError.error) {
+          setError("Email confirmation required. Check your email to activate your account.");
+        } else {
+          router.replace("/");
+        }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -73,7 +77,7 @@ export default function LoginPage() {
             {(["signin", "signup"] as Mode[]).map((m) => (
               <button
                 key={m}
-                onClick={() => { setMode(m); setError(null); setSuccess(null); }}
+                onClick={() => { setMode(m); setError(null); }}
                 className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors
                   ${mode === m
                     ? "bg-violet-600 text-white shadow-sm"
@@ -128,11 +132,6 @@ export default function LoginPage() {
             {error && (
               <div className="bg-rose-950/50 border border-rose-800/50 rounded-xl px-3.5 py-2.5 text-xs text-rose-300">
                 {error}
-              </div>
-            )}
-            {success && (
-              <div className="bg-emerald-950/50 border border-emerald-800/50 rounded-xl px-3.5 py-2.5 text-xs text-emerald-300">
-                {success}
               </div>
             )}
 
