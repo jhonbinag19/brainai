@@ -32,12 +32,11 @@ export default function LoginPage() {
     const supabase = getSupabaseClient();
 
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ email, password, emailConfirm: false });
       if (error) {
         setError(error.message);
       } else {
-        setSuccess("Account created! Check your email to confirm, then sign in.");
-        setMode("signin");
+        router.replace("/");
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
