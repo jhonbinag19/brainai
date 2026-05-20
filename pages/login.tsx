@@ -30,17 +30,15 @@ export default function LoginPage() {
     const supabase = getSupabaseClient();
 
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { email_confirm: false } },
+      });
       if (error) {
         setError(error.message);
       } else {
-        // Try to immediately sign in — works if email confirmation is disabled
-        const signInError = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError.error) {
-          setError("Email confirmation required. Check your email to activate your account.");
-        } else {
-          router.replace("/");
-        }
+        router.replace("/");
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
