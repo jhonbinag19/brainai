@@ -37,20 +37,41 @@ export default function LoginPage() {
     const supabase = getSupabaseClient();
 
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
+      const { error, data } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { email_confirm: false } },
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { email_confirm: false }
+        },
       });
       if (error) {
-        setError(error.message);
+        // Better error messages
+        if (error.message.includes("rate limit") || error.message.includes("exceeded")) {
+          setError("Too many sign-up attempts. Please wait a few minutes or try signing in.");
+        } else if (error.message.includes("already")) {
+          setError("An account with this email already exists. Please sign in instead.");
+        } else {
+          setError(error.message);
+        }
       } else {
-        router.replace("/");
+        // If signup succeeded but no session, email confirmation might be required
+        if (data.session) {
+          router.replace("/");
+        } else {
+          setError("Account created! If email confirmation is enabled, please check your email.");
+        }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setError(error.message);
+        if (error.message.includes("rate limit") || error.message.includes("exceeded")) {
+          setError("Too many sign-in attempts. Please wait a few minutes.");
+        } else if (error.message.includes("Invalid")) {
+          setError("Incorrect email or password.");
+        } else {
+          setError(error.message);
+        }
       } else {
         router.replace("/");
       }
@@ -146,6 +167,13 @@ export default function LoginPage() {
               <div className="bg-rose-950/50 border border-rose-800/50 rounded-xl px-3.5 py-2.5 text-xs text-rose-300">
                 {error}
               </div>
+            )}
+
+            {/* Rate limit warning */}
+            {mode === "signup" && (
+              <p className="text-[10px] text-zinc-500 text-center">
+                If you see a rate limit error, please wait a few minutes before trying again.
+              </p>
             )}
 
             {/* Submit */}
