@@ -1,9 +1,13 @@
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, useCallback } from "react";
 import { useRouter } from "next/router";
-import { Loader2, Eye, EyeOff, BrainCircuit } from "lucide-react";
+import { Loader2, Eye, EyeOff, BrainCircuit, AlertCircle } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase-client";
 
 type Mode = "signin" | "signup";
+
+// Rate limit config: 30 requests per 5 minutes = ~1 request every 10 seconds
+const RATE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes
+const COOLDOWN_MS = 10000; // 10 seconds between attempts
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,6 +18,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [cooldown, setCooldown] = useState(0);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
 
   // If already logged in, go straight to chat
   useEffect(() => {
@@ -29,8 +36,40 @@ export default function LoginPage() {
     });
   }, [router]);
 
+  // Cooldown countdown
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
+
+  // Rate limit countdown
+  useEffect(() => {
+    if (rateLimitCountdown > 0) {
+      const timer = setTimeout(() => setRateLimitCountdown(rateLimitCountdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (rateLimitCountdown === 0 && isRateLimited) {
+      setIsRateLimited(false);
+    }
+  }, [rateLimitCountdown, isRateLimited]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+
+    // Check cooldown
+    if (cooldown > 0) {
+      setError(`Please wait ${cooldown} seconds before trying again.`);
+      return;
+    }
+
+    // Check rate limit
+    if (isRateLimited) {
+      const minutes = Math.ceil(rateLimitCountdown / 60);
+      setError(`Too many attempts. Please wait ${minutes} minute${minutes > 1 ? 's' : ''}.`);
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
@@ -47,30 +86,38 @@ export default function LoginPage() {
       });
       if (error) {
         // Better error messages
-        if (error.message.includes("rate limit") || error.message.includes("exceeded")) {
+        if (error.message.includes("rate limit") || error.message.includes("exceeded") || error.message.includes("over limit")) {
+          setIsRateLimited(true);
+          setRateLimitCountdown(RATE_LIMIT_MS / 1000);
           setError("Too many sign-up attempts. Please wait a few minutes or try signing in.");
-        } else if (error.message.includes("already")) {
+        } else if (error.message.includes("already") || error.message.includes("registered")) {
           setError("An account with this email already exists. Please sign in instead.");
         } else {
           setError(error.message);
         }
+        setCooldown(COOLDOWN_MS / 1000);
       } else {
         // If signup succeeded but no session, email confirmation might be required
         if (data.session) {
           router.replace("/");
         } else {
-          setError("Account created! If email confirmation is enabled, please check your email.");
+          setError("Account created! Please check your email to confirm your account.");
+          setCooldown(COOLDOWN_MS / 1000);
         }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        if (error.message.includes("rate limit") || error.message.includes("exceeded")) {
+        if (error.message.includes("rate limit") || error.message.includes("exceeded") || error.message.includes("over limit")) {
+          setIsRateLimited(true);
+          setRateLimitCountdown(RATE_LIMIT_MS / 1000);
           setError("Too many sign-in attempts. Please wait a few minutes.");
-        } else if (error.message.includes("Invalid")) {
+        } else if (error.message.includes("Invalid") || error.message.includes("credentials")) {
           setError("Incorrect email or password.");
+          setCooldown(COOLDOWN_MS / 1000);
         } else {
           setError(error.message);
+          setCooldown(COOLDOWN_MS / 1000);
         }
       } else {
         router.replace("/");
@@ -106,6 +153,16 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl">
+          {/* Rate limit warning */}
+          {isRateLimited && (
+            <div className="mb-4 bg-amber-950/50 border border-amber-800/50 rounded-xl px-3.5 py-2.5 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-300">
+                <span className="font-medium">Rate limit active:</span> Please wait{" "}
+                {Math.ceil(rateLimitCountdown / 60)} minute{Math.ceil(rateLimitCountdown / 60) > 1 ? 's' : ''} before trying again.
+              </div>
+            </div>
+          )}
           {/* Tab switcher */}
           <div className="flex bg-zinc-800/60 rounded-xl p-1 mb-6 gap-1">
             {(["signin", "signup"] as Mode[]).map((m) => (
@@ -163,27 +220,20 @@ export default function LoginPage() {
             </div>
 
             {/* Feedback */}
-            {error && (
+            {error && !isRateLimited && (
               <div className="bg-rose-950/50 border border-rose-800/50 rounded-xl px-3.5 py-2.5 text-xs text-rose-300">
                 {error}
               </div>
             )}
 
-            {/* Rate limit warning */}
-            {mode === "signup" && (
-              <p className="text-[10px] text-zinc-500 text-center">
-                If you see a rate limit error, please wait a few minutes before trying again.
-              </p>
-            )}
-
             {/* Submit */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || cooldown > 0 || isRateLimited}
               className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 mt-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {mode === "signin" ? "Sign In" : "Create Account"}
+              {cooldown > 0 ? `Wait ${cooldown}s...` : (mode === "signin" ? "Sign In" : "Create Account")}
             </button>
           </form>
         </div>
