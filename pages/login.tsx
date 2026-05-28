@@ -13,12 +13,19 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   // If already logged in, go straight to chat
   useEffect(() => {
     const supabase = getSupabaseClient();
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/");
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        router.replace("/");
+      } else {
+        setCheckingAuth(false);
+      }
+    }).catch(() => {
+      setCheckingAuth(false);
     });
   }, [router]);
 
@@ -50,6 +57,14 @@ export default function LoginPage() {
     }
 
     setLoading(false);
+  }
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+        <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
+      </div>
+    );
   }
 
   return (

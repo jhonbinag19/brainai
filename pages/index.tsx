@@ -14,12 +14,16 @@ export default function Home() {
   useEffect(() => {
     const supabase = getSupabaseClient();
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
         setAuthed(true);
       } else {
         router.replace("/login");
       }
+      setChecking(false);
+    }).catch(() => {
+      // On error, redirect to login
+      router.replace("/login");
       setChecking(false);
     });
 
