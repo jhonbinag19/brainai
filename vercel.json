@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "env": {
+    "MAILGUN_API_KEY": "@mailgun-api-key",
+    "MAILGUN_DOMAIN": "@mailgun-domain",
+    "MAILGUN_FROM": "@mailgun-from",
+    "NEXT_PUBLIC_APP_URL": "@next-public-app-url",
+    "NEXT_PUBLIC_SUPABASE_URL": "@next-public-supabase-url",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@next-public-supabase-anon-key"
+  }
+}
