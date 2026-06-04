@@ -76,34 +76,37 @@ export default function LoginPage() {
     const supabase = getSupabaseClient();
 
     if (mode === "signup") {
-      const { error, data } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: window.location.origin,
-          data: { email_confirm: false }
-        },
+      // Use custom API route that sends Mailgun confirmation email
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
       });
-      if (error) {
-        // Better error messages
-        if (error.message.includes("rate limit") || error.message.includes("exceeded") || error.message.includes("over limit")) {
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (result.error?.includes("rate limit") || result.error?.includes("exceeded")) {
           setIsRateLimited(true);
           setRateLimitCountdown(RATE_LIMIT_MS / 1000);
-          setError("Too many sign-up attempts. Please wait a few minutes or try signing in.");
-        } else if (error.message.includes("already") || error.message.includes("registered")) {
+          setError("Too many sign-up attempts. Please wait a few minutes.");
+        } else if (result.error?.includes("already") || result.error?.includes("registered")) {
           setError("An account with this email already exists. Please sign in instead.");
         } else {
-          setError(error.message);
+          setError(result.error || "Sign-up failed. Please try again.");
         }
         setCooldown(COOLDOWN_MS / 1000);
       } else {
-        // If signup succeeded but no session, email confirmation might be required
-        if (data.session) {
-          router.replace("/");
-        } else {
-          setError("Account created! Please check your email to confirm your account.");
-          setCooldown(COOLDOWN_MS / 1000);
-        }
+        // Success - show message about email confirmation
+        setError(null);
+        setMode("signin");
+        // Show success message
+        setEmail(""); // Clear email for security
+        setPassword(""); // Clear password
+        // Use a timeout to show success message
+        setTimeout(() => {
+          alert("Account created! Please check your email to confirm your account.");
+        }, 100);
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
