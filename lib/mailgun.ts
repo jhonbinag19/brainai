@@ -86,22 +86,22 @@ export async function sendConfirmationEmail(email: string, confirmUrl: string): 
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; padding: 20px; margin: 0; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-          .header { background: linear-gradient(135deg, #E02B20 0%, #b81f18 100%); color: white; padding: 30px; text-align: center; }
+          .header { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 30px; text-align: center; }
           .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
           .content { padding: 40px 30px; }
           .content h2 { color: #1f2937; margin-top: 0; font-size: 20px; }
           .content p { color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
-          .info-box { background: #f3f4f6; padding: 15px; border-radius: 6px; border-left: 4px solid #E02B20; margin: 20px 0; }
+          .info-box { background: #f3f4f6; padding: 15px; border-radius: 6px; border-left: 4px solid #7c3aed; margin: 20px 0; }
           .info-box strong { color: #1f2937; }
           .button-container { text-align: center; margin: 30px 0; }
-          .button { display: inline-block; background: linear-gradient(135deg, #E02B20 0%, #b81f18 100%); color: #ffffff !important; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; box-shadow: 0 4px 6px rgba(224, 43, 32, 0.3); transition: all 0.2s ease; }
-          .button:hover { box-shadow: 0 6px 8px rgba(224, 43, 32, 0.4); transform: translateY(-1px); }
+          .button { display: inline-block; background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: #ffffff !important; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; box-shadow: 0 4px 6px rgba(124, 58, 237, 0.3); transition: all 0.2s ease; }
+          .button:hover { box-shadow: 0 6px 8px rgba(124, 58, 237, 0.4); transform: translateY(-1px); }
           .button a { color: #ffffff !important; text-decoration: none; }
           .button a:link { color: #ffffff !important; }
           .button a:visited { color: #ffffff !important; }
           .button a:hover { color: #ffffff !important; }
           .button a:active { color: #ffffff !important; }
-          .link-text { color: #E02B20; word-break: break-all; font-size: 14px; line-height: 1.5; }
+          .link-text { color: #7c3aed; word-break: break-all; font-size: 14px; line-height: 1.5; }
           .footer { background: #f9fafb; padding: 20px 30px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
           .footer p { margin: 0; }
           .warning { font-size: 12px; color: #9ca3af; margin-top: 30px; padding: 15px; background: #fffbeb; border-radius: 6px; border: 1px solid #fcd34d; }
@@ -147,3 +147,4 @@ export async function sendConfirmationEmail(email: string, confirmUrl: string): 
     text: `Confirm your Nuno AI account by visiting: ${confirmUrl}`,
   });
 }
+

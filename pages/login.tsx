@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { Loader2, Eye, EyeOff, BrainCircuit, AlertCircle } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase-client";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "forgot";
 
 // Rate limit config: 30 requests per 5 minutes = ~1 request every 10 seconds
 const RATE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes
@@ -35,6 +35,13 @@ export default function LoginPage() {
       setCheckingAuth(false);
     });
   }, [router]);
+
+  // Check for mode in URL query params
+  useEffect(() => {
+    if (router.query.mode === 'forgot') {
+      setMode('forgot');
+    }
+  }, [router.query]);
 
   // Cooldown countdown
   useEffect(() => {
@@ -108,6 +115,34 @@ export default function LoginPage() {
           alert("Account created! Please check your email to confirm your account.");
         }, 100);
       }
+    } else if (mode === "forgot") {
+      // Request password reset
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (result.error?.includes("rate limit") || result.error?.includes("exceeded")) {
+          setIsRateLimited(true);
+          setRateLimitCountdown(RATE_LIMIT_MS / 1000);
+          setError("Too many attempts. Please wait a few minutes.");
+        } else {
+          setError(result.error || "Failed to send reset email. Please try again.");
+        }
+        setCooldown(COOLDOWN_MS / 1000);
+      } else {
+        // Success - show message about email
+        setError(null);
+        setEmail("");
+        setTimeout(() => {
+          alert("Password reset email sent! Please check your inbox to reset your password.");
+          setMode("signin");
+        }, 100);
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
@@ -149,7 +184,9 @@ export default function LoginPage() {
           <div className="text-center">
             <h1 className="text-xl font-bold text-white tracking-tight">Nuno AI</h1>
             <p className="text-sm text-zinc-500 mt-0.5">
-              {mode === "signin" ? "Sign in to your account" : "Create your account"}
+              {mode === "signin" ? "Sign in to your account" :
+               mode === "signup" ? "Create your account" :
+               "Reset your password"}
             </p>
           </div>
         </div>
@@ -167,20 +204,22 @@ export default function LoginPage() {
             </div>
           )}
           {/* Tab switcher */}
-          <div className="flex bg-zinc-800/60 rounded-xl p-1 mb-6 gap-1">
-            {(["signin", "signup"] as Mode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => { setMode(m); setError(null); }}
-                className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors
-                  ${mode === m
-                    ? "bg-violet-600 text-white shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200"}`}
-              >
-                {m === "signin" ? "Sign In" : "Sign Up"}
-              </button>
-            ))}
-          </div>
+          {mode !== "forgot" && (
+            <div className="flex bg-zinc-800/60 rounded-xl p-1 mb-6 gap-1">
+              {(["signin", "signup"] as Mode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { setMode(m); setError(null); }}
+                  className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors
+                    ${mode === m
+                      ? "bg-violet-600 text-white shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"}`}
+                >
+                  {m === "signin" ? "Sign In" : "Sign Up"}
+                </button>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
@@ -196,31 +235,33 @@ export default function LoginPage() {
               />
             </div>
 
-            {/* Password */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-400">Password</label>
-              <div className="relative">
-                <input
-                  type={showPass ? "text" : "password"}
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-white placeholder-zinc-500 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
-                >
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            {/* Password - only show for signin/signup */}
+            {mode !== "forgot" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-400">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPass ? "text" : "password"}
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 pr-10 text-sm text-white placeholder-zinc-500 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {mode === "signup" && (
+                  <p className="text-[11px] text-zinc-600">Minimum 6 characters</p>
+                )}
               </div>
-              {mode === "signup" && (
-                <p className="text-[11px] text-zinc-600">Minimum 6 characters</p>
-              )}
-            </div>
+            )}
 
             {/* Feedback */}
             {error && !isRateLimited && (
@@ -236,9 +277,38 @@ export default function LoginPage() {
               className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 mt-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {cooldown > 0 ? `Wait ${cooldown}s...` : (mode === "signin" ? "Sign In" : "Create Account")}
+              {cooldown > 0 ? `Wait ${cooldown}s...` :
+               mode === "signin" ? "Sign In" :
+               mode === "signup" ? "Create Account" :
+               "Send Reset Link"}
             </button>
           </form>
+
+          {/* Forgot password link */}
+          {mode === "signin" && (
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                onClick={() => { setMode("forgot"); setError(null); setEmail(""); setPassword(""); }}
+                className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                Forgot your password?
+              </button>
+            </div>
+          )}
+
+          {/* Back to signin link */}
+          {mode === "forgot" && (
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                onClick={() => { setMode("signin"); setError(null); setEmail(""); setPassword(""); }}
+                className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                ← Back to sign in
+              </button>
+            </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-zinc-600 mt-4">
