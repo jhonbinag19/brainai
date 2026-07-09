@@ -290,7 +290,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => { setMode("forgot"); setError(null); setEmail(""); setPassword(""); }}
-                className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                className="text-xs text-violet-400 hover:text-violet-300 transition-colors underline"
               >
                 Forgot your password?
               </button>
