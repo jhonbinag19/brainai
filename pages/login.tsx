@@ -138,10 +138,7 @@ export default function LoginPage() {
         // Success - show message about email
         setError(null);
         setEmail("");
-        setTimeout(() => {
-          alert("Password reset email sent! Please check your inbox to reset your password.");
-          setMode("signin");
-        }, 100);
+        setMode("signin");
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
