@@ -314,7 +314,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-zinc-600 mt-4">
-          Powered by YouTube Brain RAG
+          Powered by Nuno AI
         </p>
       </div>
     </div>

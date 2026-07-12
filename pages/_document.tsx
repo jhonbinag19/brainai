@@ -5,7 +5,7 @@ export default function Document() {
     <Html lang="en" suppressHydrationWarning>
       <Head>
         <title>Nuno AI</title>
-        <meta name="description" content="Nuno AI — powered by YouTube Brain RAG" />
+        <meta name="description" content="Nuno AI — AI-powered assistant" />
       </Head>
       <body suppressHydrationWarning>
         <Main />

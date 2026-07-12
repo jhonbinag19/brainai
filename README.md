@@ -1,6 +1,6 @@
 # Nuno AI
 
-AI-powered chat interface with YouTube Brain RAG integration.
+AI-powered chat interface with advanced knowledge base integration.
 
 ## Getting Started
 

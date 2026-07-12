@@ -93,10 +93,10 @@ export default function ResetPasswordPage() {
         setError(result.error || 'Failed to update password. Please try again.');
       } else {
         setSuccess(true);
-        // Redirect to login after 2 seconds
+        // Redirect to login after 3 seconds
         setTimeout(() => {
           router.push('/login');
-        }, 2000);
+        }, 3000);
       }
     } catch (err) {
       setError('An error occurred while updating your password. Please try again.');
@@ -242,7 +242,7 @@ export default function ResetPasswordPage() {
         </div>
 
         <p className="text-center text-xs text-zinc-600 mt-4">
-          Powered by YouTube Brain RAG
+          Powered by Nuno AI
         </p>
       </div>
     </div>

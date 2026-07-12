@@ -42,7 +42,7 @@ export default function BrainSidebar({ selectedBrain, onSelect }: Props) {
         <div className="p-1.5 rounded-lg bg-violet-600">
           <Zap className="w-4 h-4 text-white" />
         </div>
-        <span className="font-semibold text-white text-sm tracking-tight">YouTube Brain</span>
+        <span className="font-semibold text-white text-sm tracking-tight">Nuno AI</span>
       </div>
 
       {/* Brain list */}
@@ -96,7 +96,7 @@ export default function BrainSidebar({ selectedBrain, onSelect }: Props) {
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-zinc-800">
-        <p className="text-[11px] text-zinc-600">Powered by YouTube Brain RAG</p>
+        <p className="text-[11px] text-zinc-600">Powered by Nuno AI</p>
       </div>
     </aside>
   );
