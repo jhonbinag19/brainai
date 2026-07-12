@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent, useCallback } from "react";
 import { useRouter } from "next/router";
 import { Loader2, Eye, EyeOff, BrainCircuit, AlertCircle } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase-client";
+import { toast } from "toastify-react";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -110,10 +111,7 @@ export default function LoginPage() {
         // Show success message
         setEmail(""); // Clear email for security
         setPassword(""); // Clear password
-        // Use a timeout to show success message
-        setTimeout(() => {
-          alert("Account created! Please check your email to confirm your account.");
-        }, 100);
+        toast.success("Account created! Please check your email to confirm your account.");
       }
     } else if (mode === "forgot") {
       // Request password reset
@@ -140,10 +138,8 @@ export default function LoginPage() {
         setEmail("");
         setPassword("");
         setMode("signin");
-        // Show success message after switching to signin mode
-        setTimeout(() => {
-          alert("Password reset email sent! Please check your inbox or spam folder.");
-        }, 100);
+        // Show success message
+        toast.success("Password reset email sent! Please check your inbox or spam folder.");
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
