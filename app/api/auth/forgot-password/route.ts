@@ -54,7 +54,13 @@ export async function POST(req: NextRequest) {
     const resetUrl = `${nunoAiDomain}/auth/reset-password?token=${token}`;
 
     // Send email via Mailgun
+    console.log('Sending password reset email to:', email, 'via Mailgun');
     const emailSent = await sendPasswordResetEmail(email, resetUrl);
+    console.log('Password reset email sent result:', emailSent);
+
+    if (!emailSent) {
+      console.error('Failed to send password reset email via Mailgun');
+    }
 
     return NextResponse.json({
       success: true,
