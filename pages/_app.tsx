@@ -1,6 +1,7 @@
 import type { AppProps } from "next/app";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ToastContainer } from "toastify-react";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import "./globals.css";
 
 const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });

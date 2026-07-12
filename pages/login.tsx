@@ -2,7 +2,7 @@ import { useState, useEffect, FormEvent, useCallback } from "react";
 import { useRouter } from "next/router";
 import { Loader2, Eye, EyeOff, BrainCircuit, AlertCircle } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase-client";
-import { toast } from "toastify-react";
+import { toast } from "react-toastify";
 
 type Mode = "signin" | "signup" | "forgot";
 
