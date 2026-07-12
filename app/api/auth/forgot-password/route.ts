@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create reset URL with token - use request origin for multi-domain support
-    const requestUrl = new URL(req.url);
-    const resetUrl = `${requestUrl.origin}/auth/reset-password?token=${token}`;
+    // Create reset URL with token - always use Nuno AI domain
+    const nunoAiDomain = process.env.NEXT_PUBLIC_APP_URL || 'https://nunoai-brain.vercel.app';
+    const resetUrl = `${nunoAiDomain}/auth/reset-password?token=${token}`;
 
     // Send email via Mailgun
     const emailSent = await sendPasswordResetEmail(email, resetUrl);

@@ -14,9 +14,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get request origin for multi-domain support
-    const requestUrl = new URL(req.url);
-    const appOrigin = requestUrl.origin;
+    // Always use Nuno AI domain
+    const nunoAiDomain = process.env.NEXT_PUBLIC_APP_URL || 'https://nunoai-brain.vercel.app';
 
     const supabase = getSupabaseClient();
 
@@ -25,7 +24,7 @@ export async function POST(req: NextRequest) {
       email,
       password,
       options: {
-        emailRedirectTo: `${appOrigin}/auth/callback`,
+        emailRedirectTo: `${nunoAiDomain}/auth/callback`,
         data: { email_confirm: false }
       }
     });
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Send confirmation email via Mailgun
-    const confirmUrl = `${appOrigin}/auth/confirm?email=${encodeURIComponent(email)}`;
+    const confirmUrl = `${nunoAiDomain}/auth/confirm?email=${encodeURIComponent(email)}`;
     const emailSent = await sendConfirmationEmail(email, confirmUrl);
 
     if (!emailSent) {
