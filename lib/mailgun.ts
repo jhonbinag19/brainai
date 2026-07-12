@@ -148,3 +148,79 @@ export async function sendConfirmationEmail(email: string, confirmUrl: string): 
   });
 }
 
+/**
+ * Send password reset email
+ */
+export async function sendPasswordResetEmail(email: string, resetUrl: string): Promise<boolean> {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Your Password</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; padding: 20px; margin: 0; }
+          .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 30px; text-align: center; }
+          .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+          .content { padding: 40px 30px; }
+          .content h2 { color: #1f2937; margin-top: 0; font-size: 20px; }
+          .content p { color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
+          .info-box { background: #f3f4f6; padding: 15px; border-radius: 6px; border-left: 4px solid #7c3aed; margin: 20px 0; }
+          .info-box strong { color: #1f2937; }
+          .button-container { text-align: center; margin: 30px 0; }
+          .button { display: inline-block; background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: #ffffff !important; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; box-shadow: 0 4px 6px rgba(124, 58, 237, 0.3); transition: all 0.2s ease; }
+          .button:hover { box-shadow: 0 6px 8px rgba(124, 58, 237, 0.4); transform: translateY(-1px); }
+          .button a { color: #ffffff !important; text-decoration: none; }
+          .button a:link { color: #ffffff !important; }
+          .button a:visited { color: #ffffff !important; }
+          .button a:hover { color: #ffffff !important; }
+          .button a:active { color: #ffffff !important; }
+          .link-text { color: #7c3aed; word-break: break-all; font-size: 14px; line-height: 1.5; }
+          .footer { background: #f9fafb; padding: 20px 30px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
+          .footer p { margin: 0; }
+          .warning { font-size: 12px; color: #9ca3af; margin-top: 30px; padding: 15px; background: #fffbeb; border-radius: 6px; border: 1px solid #fcd34d; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Nuno AI</h1>
+          </div>
+          <div class="content">
+            <h2>Reset Your Password</h2>
+            <p>We received a request to reset your password for your Nuno AI account. Click the button below to create a new password.</p>
+
+            <div class="info-box">
+              <strong>Email:</strong> ${email}
+            </div>
+
+            <div class="button-container">
+              <a href="${resetUrl}" class="button" style="color: #ffffff !important; text-decoration: none;">Reset Password</a>
+            </div>
+
+            <p style="font-size: 14px; color: #6b7280;">Or copy and paste this link into your browser:</p>
+            <p class="link-text">${resetUrl}</p>
+
+            <div class="warning">
+              ⚠️ This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.
+            </div>
+          </div>
+          <div class="footer">
+            <p>Powered by Nuno AI • RapidActive Marketing</p>
+            <p style="margin-top: 8px;">© 2026 All rights reserved</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject: 'Reset Your Nuno AI Password',
+    html,
+    text: `Reset your Nuno AI password by visiting: ${resetUrl}`,
+  });
+}
+

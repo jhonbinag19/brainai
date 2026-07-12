@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseClient } from '@/lib/supabase-client';
+import { getAdminSupabaseClient } from '@/lib/supabase-admin';
+import { sendPasswordResetEmail } from '@/lib/mailgun';
+import {
+  createPasswordResetToken,
+  invalidatePreviousTokens,
+  cleanupExpiredTokens
+} from '@/lib/password-reset';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,26 +19,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = getSupabaseClient();
+    const supabase = getAdminSupabaseClient();
 
-    // Use Supabase's built-in password reset
-    // This will send an email with a secure token that redirects to our reset page
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nunoai-brain.vercel.app'}/auth/reset-password`,
-    });
+    // Check if user exists
+    const { data: { users } } = await supabase.auth.admin.listUsers();
+    const user = users.find(u => u.email === email);
 
-    // Always return success for security (don't reveal if email exists)
-    if (error) {
-      console.error('Password reset error:', error);
+    if (!user) {
+      // Don't reveal if email exists (security best practice)
       return NextResponse.json({
         success: true,
         message: 'If an account exists with this email, a password reset link has been sent.',
       });
     }
 
+    // Invalidate any previous unused tokens for this email
+    await invalidatePreviousTokens(email);
+
+    // Clean up expired tokens periodically (don't await)
+    cleanupExpiredTokens().catch(err => console.error('Cleanup error:', err));
+
+    // Generate a new reset token
+    const token = await createPasswordResetToken(email);
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Failed to generate reset token. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    // Create reset URL with token
+    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://nunoai-brain.vercel.app'}/auth/reset-password?token=${token}`;
+
+    // Send email via Mailgun
+    const emailSent = await sendPasswordResetEmail(email, resetUrl);
+
     return NextResponse.json({
       success: true,
       message: 'If an account exists with this email, a password reset link has been sent.',
+      emailSent,
     });
 
   } catch (error) {
