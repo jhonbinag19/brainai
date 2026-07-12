@@ -34,6 +34,7 @@ export async function createPasswordResetToken(email: string): Promise<string | 
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
     // Insert the token into the database
+    // @ts-ignore - Custom table not in generated types
     const { error } = await supabase
       .from('password_reset_tokens')
       .insert({
@@ -63,6 +64,7 @@ export async function verifyPasswordResetToken(token: string): Promise<string | 
   try {
     const supabase = getAdminSupabaseClient();
 
+    // @ts-ignore - Custom table not in generated types
     const { data, error } = await supabase
       .from('password_reset_tokens')
       .select('email, expires_at, used')
@@ -99,6 +101,7 @@ export async function markTokenAsUsed(token: string): Promise<boolean> {
   try {
     const supabase = getAdminSupabaseClient();
 
+    // @ts-ignore - Custom table not in generated types
     const { error } = await supabase
       .from('password_reset_tokens')
       .update({
@@ -127,6 +130,7 @@ export async function invalidatePreviousTokens(email: string): Promise<number> {
   try {
     const supabase = getAdminSupabaseClient();
 
+    // @ts-ignore - Custom table not in generated types
     const { data, error } = await supabase
       .from('password_reset_tokens')
       .update({
