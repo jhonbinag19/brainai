@@ -28,7 +28,8 @@ async function sendViaMailgunAPI(
       return false;
     }
 
-    const formData = new URLSearchParams();
+    // Use FormData for proper multipart/form-data handling
+    const formData = new FormData();
     formData.append('from', MAILGUN_FROM);
     formData.append('to', to);
     formData.append('subject', subject);

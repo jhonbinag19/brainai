@@ -135,10 +135,15 @@ export default function LoginPage() {
         }
         setCooldown(COOLDOWN_MS / 1000);
       } else {
-        // Success - show message about email
+        // Success - show success message
         setError(null);
         setEmail("");
+        setPassword("");
         setMode("signin");
+        // Show success message after switching to signin mode
+        setTimeout(() => {
+          alert("Password reset email sent! Please check your inbox or spam folder.");
+        }, 100);
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
