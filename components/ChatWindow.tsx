@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Send, Loader2, BrainCircuit, User, AlertTriangle } from "lucide-react";
 import SourceCard from "./SourceCard";
 import MarkdownMessage from "./MarkdownMessage";
-import type { Brain, ChatSource } from "@/lib/ybr-client";
+import type { Brain, ChatSource } from "@/lib/types";
 
 interface Message {
   id: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, Play } from "lucide-react";
-import type { ChatSource } from "@/lib/ybr-client";
+import type { ChatSource } from "@/lib/types";
 
 interface Props {
   sources: ChatSource[];

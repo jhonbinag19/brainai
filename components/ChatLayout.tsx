@@ -5,7 +5,7 @@ import { BrainCircuit, Loader2, LogOut } from "lucide-react";
 import { useRouter } from "next/router";
 import ChatWindow from "./ChatWindow";
 import { getSupabaseClient } from "@/lib/supabase-client";
-import type { Brain } from "@/lib/ybr-client";
+import type { Brain } from "@/lib/types";
 
 const NUNO_SLUG = "nuno-gohighlevel";
 const DISPLAY_NAME = "Nuno's Brain";

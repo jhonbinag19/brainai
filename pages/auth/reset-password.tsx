@@ -12,73 +12,52 @@ export default function ResetPasswordPage() {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [checkingSession, setCheckingSession] = useState(true);
-  const [hasValidSession, setHasValidSession] = useState(false);
+  const [checkingToken, setCheckingToken] = useState(true);
+  const [hasValidToken, setHasValidToken] = useState(false);
+  const [email, setEmail] = useState('');
 
   useEffect(() => {
-    // Check if user has a valid session (from the reset link)
-    // Supabase automatically sets a temporary session when user clicks the reset link
-    const supabase = getSupabaseClient();
+    const verifyToken = async () => {
+      const { token } = router.query;
 
-    // Parse hash for access token (Supabase passes tokens in URL hash)
-    const hashParams = new URLSearchParams(
-      window.location.hash.substring(1) // Remove the '#'
-    );
-    const accessToken = hashParams.get('access_token');
-
-    if (accessToken) {
-      // User arrived via Supabase reset email link
-      // Wait for session to be established
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          setHasValidSession(true);
-          setCheckingSession(false);
-        } else {
-          // Session not ready yet, wait a bit and check again
-          setTimeout(() => {
-            supabase.auth.getSession().then(({ data: { session: retrySession } }) => {
-              if (retrySession) {
-                setHasValidSession(true);
-              } else {
-                setError('Invalid or expired reset link. Please request a new password reset.');
-              }
-              setCheckingSession(false);
-            });
-          }, 500);
-        }
-      });
-    } else {
-      // Check for existing session
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          setHasValidSession(true);
-        } else {
-          setError('Invalid or expired reset link. Please request a new password reset.');
-        }
-        setCheckingSession(false);
-      }).catch(() => {
-        setError('Failed to verify reset link. Please try again.');
-        setCheckingSession(false);
-      });
-    }
-
-    // Listen for auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' && session) {
-        setHasValidSession(true);
-        setCheckingSession(false);
+      if (!token || typeof token !== 'string') {
+        setError('Invalid or expired reset link. Please request a new password reset.');
+        setCheckingToken(false);
+        return;
       }
-    });
 
-    return () => {
-      authListener.subscription.unsubscribe();
+      try {
+        // Verify token with backend
+        const response = await fetch('/api/auth/verify-reset-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.valid) {
+          setError('Invalid or expired reset link. Please request a new password reset.');
+        } else {
+          setHasValidToken(true);
+          setEmail(result.email || '');
+        }
+      } catch (err) {
+        setError('Failed to verify reset link. Please request a new password reset.');
+      }
+
+      setCheckingToken(false);
     };
-  }, []);
+
+    if (router.isReady) {
+      verifyToken();
+    }
+  }, [router.isReady, router.query]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
-    if (!hasValidSession) {
+    if (!hasValidToken) {
       setError('Invalid session. Please request a new password reset link.');
       return;
     }
@@ -99,13 +78,19 @@ export default function ResetPasswordPage() {
     const supabase = getSupabaseClient();
 
     try {
-      // Update the user's password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: password,
+      // Update the user's password using admin API
+      const { token } = router.query;
+
+      const response = await fetch('/api/auth/update-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
       });
 
-      if (updateError) {
-        setError(updateError.message || 'Failed to update password. Please try again.');
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error || 'Failed to update password. Please try again.');
       } else {
         setSuccess(true);
         // Redirect to login after 2 seconds
@@ -120,7 +105,7 @@ export default function ResetPasswordPage() {
     }
   }
 
-  if (checkingSession) {
+  if (checkingToken) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
         <div className="flex flex-col items-center gap-3">
@@ -139,7 +124,7 @@ export default function ResetPasswordPage() {
           <div className="w-12 h-12 rounded-2xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/40">
             {success ? (
               <CheckCircle className="w-6 h-6 text-white" />
-            ) : error && !hasValidSession ? (
+            ) : error && !hasValidToken ? (
               <AlertTriangle className="w-6 h-6 text-white" />
             ) : (
               <Lock className="w-6 h-6 text-white" />
@@ -149,7 +134,7 @@ export default function ResetPasswordPage() {
             <h1 className="text-xl font-bold text-white tracking-tight">Nuno AI</h1>
             <p className="text-sm text-zinc-500 mt-0.5">
               {success ? 'Password Updated!' :
-               error && !hasValidSession ? 'Reset Link Invalid' :
+               error && !hasValidToken ? 'Reset Link Invalid' :
                'Reset Your Password'}
             </p>
           </div>
@@ -166,7 +151,7 @@ export default function ResetPasswordPage() {
                 Your password has been successfully updated. Redirecting to login...
               </p>
             </div>
-          ) : error && !hasValidSession ? (
+          ) : error && !hasValidToken ? (
             <div className="text-center space-y-4">
               <div className="w-12 h-12 rounded-full bg-rose-900/40 flex items-center justify-center mx-auto">
                 <XCircle className="w-6 h-6 text-rose-400" />

@@ -19,24 +19,25 @@ CREATE TABLE IF NOT EXISTS public.password_reset_tokens (
   used_at TIMESTAMP WITH TIME ZONE
 );
 
--- Create index on token for fast lookups
+-- Create indexes (safe to run multiple times)
 CREATE INDEX IF NOT EXISTS password_reset_tokens_token_idx
   ON public.password_reset_tokens(token);
 
--- Create index on email for user lookups
 CREATE INDEX IF NOT EXISTS password_reset_tokens_email_idx
   ON public.password_reset_tokens(email);
 
--- Create index on expires_at for cleanup queries
 CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_at_idx
   ON public.password_reset_tokens(expires_at);
 
--- Create index on used for filtering active tokens
 CREATE INDEX IF NOT EXISTS password_reset_tokens_used_idx
   ON public.password_reset_tokens(used);
 
 -- Add RLS (Row Level Security) policies
 ALTER TABLE public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist, then recreate
+DROP POLICY IF EXISTS "Service role has full access" ON public.password_reset_tokens;
+DROP POLICY IF EXISTS "No direct access for users" ON public.password_reset_tokens;
 
 -- Policy: Service role can do everything
 CREATE POLICY "Service role has full access" ON public.password_reset_tokens
@@ -52,7 +53,7 @@ CREATE POLICY "No direct access for users" ON public.password_reset_tokens
   USING (false)
   WITH CHECK (false);
 
--- Create a function to clean up expired tokens (run via cron or scheduled function)
+-- Create a function to clean up expired tokens
 CREATE OR REPLACE FUNCTION public.cleanup_expired_tokens()
 RETURNS BIGINT
 LANGUAGE plpgsql
@@ -74,6 +75,6 @@ $$;
 -- Grant execute on cleanup function to service role
 GRANT EXECUTE ON FUNCTION public.cleanup_expired_tokens() TO service_role;
 
--- Comment
+-- Comments
 COMMENT ON TABLE public.password_reset_tokens IS 'Stores password reset tokens with expiration for secure password resets across serverless instances';
 COMMENT ON FUNCTION public.cleanup_expired_tokens() IS 'Cleans up expired and used password reset tokens older than 24 hours';

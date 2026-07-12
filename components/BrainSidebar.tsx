@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BrainCircuit, ChevronRight, Loader2, Zap } from "lucide-react";
-import type { Brain } from "@/lib/ybr-client";
+import type { Brain } from "@/lib/types";
 
 interface Props {
   selectedBrain: Brain | null;
