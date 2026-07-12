@@ -40,7 +40,7 @@ export async function createPasswordResetToken(email: string): Promise<string | 
         token,
         expires_at: expiresAt,
         used: false
-      });
+      } as any);
 
     if (error) {
       console.error('Error creating password reset token:', error);
@@ -66,7 +66,7 @@ export async function verifyPasswordResetToken(token: string): Promise<string | 
       .from('password_reset_tokens')
       .select('email, expires_at, used')
       .eq('token', token)
-      .single();
+      .single() as any;
 
     if (error || !data) {
       console.error('Error verifying token:', error);
@@ -103,7 +103,7 @@ export async function markTokenAsUsed(token: string): Promise<boolean> {
       .update({
         used: true,
         used_at: new Date().toISOString()
-      })
+      } as any)
       .eq('token', token);
 
     if (error) {
@@ -128,7 +128,7 @@ export async function invalidatePreviousTokens(email: string): Promise<number> {
 
     const { data, error } = await supabase
       .from('password_reset_tokens')
-      .update({ used: true, used_at: new Date().toISOString() })
+      .update({ used: true, used_at: new Date().toISOString() } as any)
       .eq('email', email)
       .eq('used', false)
       .select('id');
