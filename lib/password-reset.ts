@@ -9,19 +9,6 @@ export interface ResetTokenData {
   used_at?: string;
 }
 
-// Database types for Supabase operations
-interface DatabaseTokenInsert {
-  email: string;
-  token: string;
-  expires_at: string;
-  used: boolean;
-}
-
-interface DatabaseTokenUpdate {
-  used: boolean;
-  used_at: string;
-}
-
 /**
  * Generate a cryptographically secure random token
  */
@@ -47,7 +34,6 @@ export async function createPasswordResetToken(email: string): Promise<string | 
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
     // Insert the token into the database
-    // @ts-expect-error - password_reset_tokens table is not in default types
     const { error } = await supabase
       .from('password_reset_tokens')
       .insert({
@@ -77,7 +63,6 @@ export async function verifyPasswordResetToken(token: string): Promise<string | 
   try {
     const supabase = getAdminSupabaseClient();
 
-    // @ts-expect-error - password_reset_tokens table is not in default types
     const { data, error } = await supabase
       .from('password_reset_tokens')
       .select('email, expires_at, used')
@@ -114,7 +99,6 @@ export async function markTokenAsUsed(token: string): Promise<boolean> {
   try {
     const supabase = getAdminSupabaseClient();
 
-    // @ts-expect-error - password_reset_tokens table is not in default types
     const { error } = await supabase
       .from('password_reset_tokens')
       .update({
@@ -143,7 +127,6 @@ export async function invalidatePreviousTokens(email: string): Promise<number> {
   try {
     const supabase = getAdminSupabaseClient();
 
-    // @ts-expect-error - password_reset_tokens table is not in default types
     const { data, error } = await supabase
       .from('password_reset_tokens')
       .update({
