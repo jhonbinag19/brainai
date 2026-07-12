@@ -47,15 +47,15 @@ export async function createPasswordResetToken(email: string): Promise<string | 
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
     // Insert the token into the database
-    const insertData: DatabaseTokenInsert = {
-      email,
-      token,
-      expires_at: expiresAt,
-      used: false
-    };
+    // @ts-expect-error - password_reset_tokens table is not in default types
     const { error } = await supabase
       .from('password_reset_tokens')
-      .insert(insertData as any);
+      .insert({
+        email,
+        token,
+        expires_at: expiresAt,
+        used: false
+      });
 
     if (error) {
       console.error('Error creating password reset token:', error);
@@ -77,11 +77,12 @@ export async function verifyPasswordResetToken(token: string): Promise<string | 
   try {
     const supabase = getAdminSupabaseClient();
 
+    // @ts-expect-error - password_reset_tokens table is not in default types
     const { data, error } = await supabase
       .from('password_reset_tokens')
       .select('email, expires_at, used')
       .eq('token', token)
-      .single() as any;
+      .single();
 
     if (error || !data) {
       console.error('Error verifying token:', error);
@@ -113,14 +114,13 @@ export async function markTokenAsUsed(token: string): Promise<boolean> {
   try {
     const supabase = getAdminSupabaseClient();
 
-    const updateData: DatabaseTokenUpdate = {
-      used: true,
-      used_at: new Date().toISOString()
-    };
-
+    // @ts-expect-error - password_reset_tokens table is not in default types
     const { error } = await supabase
       .from('password_reset_tokens')
-      .update(updateData as any)
+      .update({
+        used: true,
+        used_at: new Date().toISOString()
+      })
       .eq('token', token);
 
     if (error) {
@@ -143,14 +143,13 @@ export async function invalidatePreviousTokens(email: string): Promise<number> {
   try {
     const supabase = getAdminSupabaseClient();
 
-    const updateData: DatabaseTokenUpdate = {
-      used: true,
-      used_at: new Date().toISOString()
-    };
-
+    // @ts-expect-error - password_reset_tokens table is not in default types
     const { data, error } = await supabase
       .from('password_reset_tokens')
-      .update(updateData as any)
+      .update({
+        used: true,
+        used_at: new Date().toISOString()
+      })
       .eq('email', email)
       .eq('used', false)
       .select('id');
