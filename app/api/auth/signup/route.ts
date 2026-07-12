@@ -14,6 +14,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Get request origin for multi-domain support
+    const requestUrl = new URL(req.url);
+    const appOrigin = requestUrl.origin;
+
     const supabase = getSupabaseClient();
 
     // Create user without email confirmation (disabled in Supabase)
@@ -21,7 +25,7 @@ export async function POST(req: NextRequest) {
       email,
       password,
       options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'https://nunoai-brain.vercel.app'}/auth/callback`,
+        emailRedirectTo: `${appOrigin}/auth/callback`,
         data: { email_confirm: false }
       }
     });
@@ -34,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Send confirmation email via Mailgun
-    const confirmUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://nunoai-brain.vercel.app'}/auth/confirm?email=${encodeURIComponent(email)}`;
+    const confirmUrl = `${appOrigin}/auth/confirm?email=${encodeURIComponent(email)}`;
     const emailSent = await sendConfirmationEmail(email, confirmUrl);
 
     if (!emailSent) {
