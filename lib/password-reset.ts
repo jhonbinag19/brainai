@@ -5,7 +5,7 @@ import { getSupabaseClient } from './supabase-client';
 function getClient() {
   // Use admin client if service role key is available (production)
   if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return getClient();
+    return getAdminSupabaseClient();
   }
   // Fall back to regular client for local development
   return getSupabaseClient();
