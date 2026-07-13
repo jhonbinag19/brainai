@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getSupabaseClient } from '@/lib/supabase-client';
 import { getAdminSupabaseClient } from '@/lib/supabase-admin';
 import { sendPasswordResetEmail } from '@/lib/mailgun';
 import {
@@ -19,18 +20,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = getAdminSupabaseClient();
+    // For production with service role key, verify user exists
+    // For local dev, skip this check and proceed with email sending
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const supabase = getAdminSupabaseClient();
+      const { data: { users } } = await supabase.auth.admin.listUsers();
+      const user = users.find(u => u.email === email);
 
-    // Check if user exists
-    const { data: { users } } = await supabase.auth.admin.listUsers();
-    const user = users.find(u => u.email === email);
-
-    if (!user) {
-      // Don't reveal if email exists (security best practice)
-      return NextResponse.json({
-        success: true,
-        message: 'If an account exists with this email, a password reset link has been sent.',
-      });
+      if (!user) {
+        // Don't reveal if email exists (security best practice)
+        return NextResponse.json({
+          success: true,
+          message: 'If an account exists with this email, a password reset link has been sent.',
+        });
+      }
     }
 
     // Invalidate any previous unused tokens for this email

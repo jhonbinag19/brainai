@@ -1,4 +1,15 @@
 import { getAdminSupabaseClient } from './supabase-admin';
+import { getSupabaseClient } from './supabase-client';
+
+// Get appropriate client based on environment
+function getClient() {
+  // Use admin client if service role key is available (production)
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return getClient();
+  }
+  // Fall back to regular client for local development
+  return getSupabaseClient();
+}
 
 export interface ResetTokenData {
   id: string;
@@ -25,7 +36,7 @@ function generateToken(length: number = 32): string {
  */
 export async function createPasswordResetToken(email: string): Promise<string | null> {
   try {
-    const supabase = getAdminSupabaseClient();
+    const supabase = getClient();
 
     // Generate a secure random token
     const token = generateToken(32);
@@ -61,7 +72,7 @@ export async function createPasswordResetToken(email: string): Promise<string | 
  */
 export async function verifyPasswordResetToken(token: string): Promise<string | null> {
   try {
-    const supabase = getAdminSupabaseClient();
+    const supabase = getClient();
 
     const { data, error } = await (supabase as any)
       .from('password_reset_tokens')
@@ -97,7 +108,7 @@ export async function verifyPasswordResetToken(token: string): Promise<string | 
  */
 export async function markTokenAsUsed(token: string): Promise<boolean> {
   try {
-    const supabase = getAdminSupabaseClient();
+    const supabase = getClient();
 
     const { error } = await (supabase as any)
       .from('password_reset_tokens')
@@ -125,7 +136,7 @@ export async function markTokenAsUsed(token: string): Promise<boolean> {
  */
 export async function invalidatePreviousTokens(email: string): Promise<number> {
   try {
-    const supabase = getAdminSupabaseClient();
+    const supabase = getClient();
 
     const { data, error } = await (supabase as any)
       .from('password_reset_tokens')
@@ -155,7 +166,7 @@ export async function invalidatePreviousTokens(email: string): Promise<number> {
  */
 export async function cleanupExpiredTokens(): Promise<number> {
   try {
-    const supabase = getAdminSupabaseClient();
+    const supabase = getClient();
 
     const { data, error } = await supabase.rpc('cleanup_expired_tokens');
 
