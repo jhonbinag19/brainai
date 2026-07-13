@@ -28,13 +28,13 @@ async function sendViaMailgunAPI(
       return false;
     }
 
-    // Use FormData for proper multipart/form-data handling
-    const formData = new FormData();
-    formData.append('from', MAILGUN_FROM);
-    formData.append('to', to);
-    formData.append('subject', subject);
-    formData.append('html', html);
-    if (text) formData.append('text', text);
+    // Use URLSearchParams for better Node.js compatibility
+    const params = new URLSearchParams();
+    params.append('from', MAILGUN_FROM);
+    params.append('to', to);
+    params.append('subject', subject);
+    params.append('html', html);
+    if (text) params.append('text', text);
 
     const response = await fetch(
       `https://api.mailgun.net/v3/${MAILGUN_DOMAIN}/messages`,
@@ -42,8 +42,9 @@ async function sendViaMailgunAPI(
         method: 'POST',
         headers: {
           'Authorization': `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: formData,
+        body: params,
       }
     );
 
