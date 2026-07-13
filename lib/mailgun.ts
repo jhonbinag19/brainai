@@ -28,12 +28,6 @@ async function sendViaMailgunAPI(
       return false;
     }
 
-    // Check if API key has valid format (should start with 'key-' or similar)
-    if (!MAILGUN_API_KEY.includes('-')) {
-      console.error('MAILGUN_API_KEY appears to be in wrong format. Expected format: key-xxxxxxxxxx');
-      return false;
-    }
-
     // Use FormData for proper multipart/form-data handling
     const formData = new FormData();
     formData.append('from', MAILGUN_FROM);
