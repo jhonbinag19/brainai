@@ -3,7 +3,7 @@
 
 const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY || '';
 const MAILGUN_DOMAIN = process.env.MAILGUN_DOMAIN || 'noreply.rapidactivemarketing.com';
-const MAILGUN_FROM = process.env.MAILGUN_FROM || 'Nuno AI <nunoai@noreply.rapidactivemarketing.com>';
+const MAILGUN_FROM = process.env.MAILGUN_FROM || 'nunoai@noreply.rapidactivemarketing.com';
 
 export interface SendEmailParams {
   to: string;

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// Simple local search implementation
-// This can be extended with actual search functionality (e.g., vector database, full-text search)
+import { getSupabaseClient } from "@/lib/supabase-client";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,26 +11,36 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ results: [] });
     }
 
-    // Placeholder search results
-    // In a real implementation, you would:
-    // 1. Search a vector database (e.g., Supabase vector search, Pinecone, etc.)
-    // 2. Search full-text index
-    // 3. Return ranked results with metadata
+    const supabase = getSupabaseClient();
 
-    const results = [
-      {
-        id: "1",
-        title: `Search result for "${q}"`,
-        content: `This is a placeholder search result. Implement actual search functionality.`,
-        similarity: 0.95,
-        metadata: {
-          brain: brain || "default",
-        },
+    // Search video chunks using the Supabase function
+    const { data: chunks, error } = await supabase
+      .rpc('search_video_chunks', {
+        search_query: q,
+        match_count: 100
+      } as any) as any;
+
+    if (error) {
+      console.error('Search error:', error);
+      return NextResponse.json({ results: [], error: error.message });
+    }
+
+    const results = (chunks && chunks.length > 0) ? chunks.map((chunk: any) => ({
+      id: chunk.id,
+      title: chunk.video_title,
+      content: chunk.content,
+      similarity: chunk.similarity,
+      metadata: {
+        video_id: chunk.video_id,
+        channel_name: chunk.channel_name,
+        youtube_url: chunk.youtube_url,
+        brain: brain || "default",
       },
-    ];
+    })) : [];
 
     return NextResponse.json({ query: q, results });
   } catch (err) {
+    console.error('Search API error:', err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
