@@ -28,6 +28,12 @@ async function sendViaMailgunAPI(
       return false;
     }
 
+    // Check if API key has valid format (should start with 'key-' or similar)
+    if (!MAILGUN_API_KEY.includes('-')) {
+      console.error('MAILGUN_API_KEY appears to be in wrong format. Expected format: key-xxxxxxxxxx');
+      return false;
+    }
+
     // Use FormData for proper multipart/form-data handling
     const formData = new FormData();
     formData.append('from', MAILGUN_FROM);
@@ -41,7 +47,7 @@ async function sendViaMailgunAPI(
       {
         method: 'POST',
         headers: {
-          'Authorization': `Basic ${btoa(`api:${MAILGUN_API_KEY}`)}`,
+          'Authorization': `Basic ${Buffer.from(`api:${MAILGUN_API_KEY}`).toString('base64')}`,
         },
         body: formData,
       }
@@ -50,6 +56,7 @@ async function sendViaMailgunAPI(
     if (!response.ok) {
       const error = await response.text();
       console.error('Mailgun API error:', response.status, error);
+      console.error('Mailgun config:', { domain: MAILGUN_DOMAIN, from: MAILGUN_FROM, to });
       return false;
     }
 
