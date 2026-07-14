@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       // Fallback: Query directly if RPC doesn't exist
-      const { data: chunks } = await supabase
+      const { data: chunks } = (await supabase
         .from('video_chunks')
         .select('video_id, video_title, channel_name, youtube_url, created_at')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })) as any;
 
       // Aggregate by video_id
       const videoMap = new Map();

@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       content,
     }));
 
-    const { error } = await supabase.from('video_chunks').insert(chunkData);
+    const { error } = await supabase.from('video_chunks').insert(chunkData as any);
 
     if (error) {
       console.error('Supabase insert error:', error);

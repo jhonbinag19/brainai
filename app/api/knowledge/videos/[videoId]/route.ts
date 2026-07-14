@@ -7,10 +7,10 @@ import { getSupabaseClient } from "@/lib/supabase-client";
  */
 export async function DELETE(
   req: Request,
-  { params }: { params: { videoId: string } }
+  { params }: { params: Promise<{ videoId: string }> }
 ) {
   try {
-    const { videoId } = params;
+    const { videoId } = await params;
     const supabase = getSupabaseClient();
 
     // Delete all chunks for this video

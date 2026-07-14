@@ -67,7 +67,7 @@ export async function POST(req: Request) {
         content,
       }));
 
-      await supabase.from('video_chunks').insert(chunkData);
+      await supabase.from('video_chunks').insert(chunkData as any);
 
       return NextResponse.json({
         success: true,
