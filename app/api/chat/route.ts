@@ -13,7 +13,7 @@ import { getAdminSupabaseClient } from "@/lib/supabase-admin";
  * (or {type:"error"}). This is the shape ChatWindow.tsx already parses.
  */
 
-const ANSWER_MODEL = "claude-sonnet-5";
+const ANSWER_MODEL = "claude-opus-4-8";
 
 // Must match the model/dimensions the chunks were indexed with
 const EMBEDDING_MODEL = "gemini-embedding-2-preview";
@@ -58,9 +58,6 @@ export async function POST(req: Request) {
     if (!anthropic) {
       return sseError("ANTHROPIC_API_KEY not configured", 500);
     }
-    if (!genAI) {
-      return sseError("GEMINI_API_KEY not configured", 500);
-    }
 
     const supabase = getAdminSupabaseClient();
     const brainSlug = typeof brain === "string" && brain.trim() ? brain.trim() : DEFAULT_BRAIN_SLUG;
@@ -76,45 +73,77 @@ export async function POST(req: Request) {
       return sseError(`Brain "${brainSlug}" not found`, 404);
     }
 
-    // Embed the query — prepend brain name for domain-specific embedding,
-    // exactly as the indexing pipeline does
-    const enrichedQuery = `${brainRow.name}: ${query}`;
-    const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-    const embedResult = await model.embedContent({
-      content: { role: "user", parts: [{ text: enrichedQuery }] },
-      taskType: "RETRIEVAL_QUERY",
-      outputDimensionality: EMBEDDING_DIMENSIONS,
-    } as Parameters<typeof model.embedContent>[0]);
-    const queryEmbedding = embedResult.embedding.values;
+    // Retrieval — vector search (primary path) with a full-text fallback so
+    // chat keeps working even if the embedding service is unavailable.
+    let chunks: ChunkRow[] = [];
 
-    // Dual retrieval for source diversity: primary sources fill most slots,
-    // supplementary sources fill the rest
-    const PRIMARY_SLOTS = DEFAULT_TOP_K - 2;
-    const SUPP_SLOTS = 2;
+    if (genAI) {
+      try {
+        // Embed the query — prepend brain name for domain-specific embedding,
+        // exactly as the indexing pipeline does. The chunk index was built
+        // with Gemini embeddings, so the query must use the same model.
+        const enrichedQuery = `${brainRow.name}: ${query}`;
+        const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+        const embedResult = await model.embedContent({
+          content: { role: "user", parts: [{ text: enrichedQuery }] },
+          taskType: "RETRIEVAL_QUERY",
+          outputDimensionality: EMBEDDING_DIMENSIONS,
+        } as Parameters<typeof model.embedContent>[0]);
+        const queryEmbedding = embedResult.embedding.values;
 
-    const [{ data: primaryData }, { data: suppData }] = await Promise.all([
-      supabase.rpc("match_chunks", {
-        query_embedding: queryEmbedding,
-        brain_slug_in: brainSlug,
-        match_count: PRIMARY_SLOTS,
-        min_similarity: MIN_SIMILARITY,
-        prefer_primary: true,
-      } as any),
-      supabase.rpc("match_chunks", {
-        query_embedding: queryEmbedding,
-        brain_slug_in: brainSlug,
-        match_count: SUPP_SLOTS,
-        min_similarity: MIN_SIMILARITY,
-        prefer_primary: false,
-      } as any),
-    ]);
+        // Dual retrieval for source diversity: primary sources fill most
+        // slots, supplementary sources fill the rest
+        const PRIMARY_SLOTS = DEFAULT_TOP_K - 2;
+        const SUPP_SLOTS = 2;
 
-    const retrievedPrimary = (primaryData ?? []) as ChunkRow[];
-    const seenIds = new Set(retrievedPrimary.map((c) => c.chunk_id));
-    const uniqueSupp = ((suppData ?? []) as ChunkRow[]).filter(
-      (c) => !seenIds.has(c.chunk_id)
-    );
-    const chunks = [...retrievedPrimary, ...uniqueSupp];
+        const [{ data: primaryData }, { data: suppData }] = await Promise.all([
+          supabase.rpc("match_chunks", {
+            query_embedding: queryEmbedding,
+            brain_slug_in: brainSlug,
+            match_count: PRIMARY_SLOTS,
+            min_similarity: MIN_SIMILARITY,
+            prefer_primary: true,
+          } as any),
+          supabase.rpc("match_chunks", {
+            query_embedding: queryEmbedding,
+            brain_slug_in: brainSlug,
+            match_count: SUPP_SLOTS,
+            min_similarity: MIN_SIMILARITY,
+            prefer_primary: false,
+          } as any),
+        ]);
+
+        const retrievedPrimary = (primaryData ?? []) as ChunkRow[];
+        const seenIds = new Set(retrievedPrimary.map((c) => c.chunk_id));
+        const uniqueSupp = ((suppData ?? []) as ChunkRow[]).filter(
+          (c) => !seenIds.has(c.chunk_id)
+        );
+        chunks = [...retrievedPrimary, ...uniqueSupp];
+      } catch (embedErr) {
+        console.error("Vector retrieval failed, falling back to full-text search:", embedErr);
+      }
+    }
+
+    // Fallback: Postgres full-text search on transcript content
+    if (chunks.length === 0) {
+      const { data: ftsData } = (await supabase
+        .from("chunks")
+        .select("id, content, timestamp_start, videos(video_id, title), channels(name, is_primary)")
+        .eq("brain_id", brainRow.id)
+        .textSearch("content", query, { type: "websearch" })
+        .limit(DEFAULT_TOP_K)) as { data: any[] | null };
+
+      chunks = (ftsData ?? []).map((row) => ({
+        chunk_id: row.id,
+        content: row.content,
+        video_title: row.videos?.title ?? "Unknown video",
+        channel_name: row.channels?.name ?? "Unknown channel",
+        youtube_video_id: row.videos?.video_id ?? "",
+        timestamp_start: row.timestamp_start,
+        similarity: 0,
+        is_primary_src: row.channels?.is_primary ?? false,
+      }));
+    }
 
     const encoder = new TextEncoder();
 
