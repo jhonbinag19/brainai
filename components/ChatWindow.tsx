@@ -70,10 +70,15 @@ export default function ChatWindow({ brain }: Props) {
     abortRef.current = controller;
 
     try {
+      // Prior turns (excluding errored ones) so follow-up questions keep context
+      const conversationHistory = messages
+        .filter((m) => !m.error && m.content)
+        .map((m) => ({ role: m.role, content: m.content }));
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: text, brain: brain.slug }),
+        body: JSON.stringify({ query: text, brain: brain.slug, conversationHistory }),
         signal: controller.signal,
       });
 
@@ -145,7 +150,7 @@ export default function ChatWindow({ brain }: Props) {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, brain]);
+  }, [input, streaming, brain, messages]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
