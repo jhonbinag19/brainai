@@ -1,23 +1,50 @@
-import { NextResponse } from "next/server";
-import { getSupabaseClient } from "@/lib/supabase-client";
+import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getAdminSupabaseClient } from "@/lib/supabase-admin";
 
-// Anthropic Claude API configuration
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+/**
+ * POST /api/chat — RAG chat over the YouTube Brain.
+ *
+ * Retrieval matches the RAM Studio Brain pipeline that indexes the videos:
+ * Gemini embedding of the query → match_chunks (pgvector) filtered by brain
+ * slug → Claude answers from the retrieved transcript chunks with citations.
+ *
+ * SSE events emitted: {type:"sources"} → {type:"text"}* → {type:"done"}
+ * (or {type:"error"}). This is the shape ChatWindow.tsx already parses.
+ */
 
-interface Message {
-  role: "user" | "assistant";
+const ANSWER_MODEL = "claude-sonnet-5";
+
+// Must match the model/dimensions the chunks were indexed with
+const EMBEDDING_MODEL = "gemini-embedding-2-preview";
+const EMBEDDING_DIMENSIONS = 768;
+const DEFAULT_TOP_K = 7;
+const MIN_SIMILARITY = 0.3;
+const DEFAULT_BRAIN_SLUG = "nuno-gohighlevel";
+
+const genAI = process.env.GEMINI_API_KEY
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  : null;
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
+
+type ChunkRow = {
+  chunk_id: string;
   content: string;
-}
-
-interface VideoChunk {
-  id: string;
-  video_id: string;
   video_title: string;
   channel_name: string;
-  youtube_url: string;
-  content: string;
-  similarity?: number;
+  youtube_video_id: string;
+  timestamp_start: number | null;
+  similarity: number;
+  is_primary_src: boolean;
+};
+
+function sseError(error: string, status: number) {
+  return new Response(
+    `data: ${JSON.stringify({ type: "error", error })}\n\n`,
+    { status, headers: { "Content-Type": "text/event-stream" } }
+  );
 }
 
 export async function POST(req: Request) {
@@ -26,210 +53,164 @@ export async function POST(req: Request) {
     const { query, brain, conversationHistory } = body;
 
     if (!query?.trim()) {
-      return new Response(
-        `data: {"type":"error","error":"Query is required"}\n\n`,
-        { status: 400, headers: { "Content-Type": "text/event-stream" } }
-      );
+      return sseError("Query is required", 400);
+    }
+    if (!anthropic) {
+      return sseError("ANTHROPIC_API_KEY not configured", 500);
+    }
+    if (!genAI) {
+      return sseError("GEMINI_API_KEY not configured", 500);
     }
 
-    if (!ANTHROPIC_API_KEY) {
-      return new Response(
-        `data: {"type":"error","error":"ANTHROPIC_API_KEY not configured"}\n\n`,
-        { status: 500, headers: { "Content-Type": "text/event-stream" } }
-      );
+    const supabase = getAdminSupabaseClient();
+    const brainSlug = typeof brain === "string" && brain.trim() ? brain.trim() : DEFAULT_BRAIN_SLUG;
+
+    // Validate the brain exists in the shared YouTube Brain database
+    const { data: brainRow, error: brainErr } = (await supabase
+      .from("brains")
+      .select("id, slug, name")
+      .eq("slug", brainSlug)
+      .single()) as { data: { id: string; slug: string; name: string } | null; error: any };
+
+    if (brainErr || !brainRow) {
+      return sseError(`Brain "${brainSlug}" not found`, 404);
     }
 
-    // Search for relevant video chunks in Supabase
-    let contextChunks: VideoChunk[] = [];
-    let sources: any[] = [];
+    // Embed the query — prepend brain name for domain-specific embedding,
+    // exactly as the indexing pipeline does
+    const enrichedQuery = `${brainRow.name}: ${query}`;
+    const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+    const embedResult = await model.embedContent({
+      content: { role: "user", parts: [{ text: enrichedQuery }] },
+      taskType: "RETRIEVAL_QUERY",
+      outputDimensionality: EMBEDDING_DIMENSIONS,
+    } as Parameters<typeof model.embedContent>[0]);
+    const queryEmbedding = embedResult.embedding.values;
 
-    try {
-      const supabase = getSupabaseClient();
+    // Dual retrieval for source diversity: primary sources fill most slots,
+    // supplementary sources fill the rest
+    const PRIMARY_SLOTS = DEFAULT_TOP_K - 2;
+    const SUPP_SLOTS = 2;
 
-      // Try to search using full-text search or vector similarity
-      // This searches for video chunks that match the query
-      const { data: chunks, error } = await supabase
-        .rpc('search_video_chunks', {
-          search_query: query,
-          match_count: 50
-        } as any) as any;
+    const [{ data: primaryData }, { data: suppData }] = await Promise.all([
+      supabase.rpc("match_chunks", {
+        query_embedding: queryEmbedding,
+        brain_slug_in: brainSlug,
+        match_count: PRIMARY_SLOTS,
+        min_similarity: MIN_SIMILARITY,
+        prefer_primary: true,
+      } as any),
+      supabase.rpc("match_chunks", {
+        query_embedding: queryEmbedding,
+        brain_slug_in: brainSlug,
+        match_count: SUPP_SLOTS,
+        min_similarity: MIN_SIMILARITY,
+        prefer_primary: false,
+      } as any),
+    ]);
 
-      if (!error && chunks && chunks.length > 0) {
-        contextChunks = chunks;
-        // Deduplicate sources by video_id
-        const uniqueSources = new Map();
-        for (const chunk of chunks) {
-          if (!uniqueSources.has(chunk.video_id)) {
-            uniqueSources.set(chunk.video_id, {
-              video_title: chunk.video_title,
-              channel_name: chunk.channel_name,
-              youtube_url: chunk.youtube_url,
-              similarity: chunk.similarity,
-            });
-          }
-        }
-        sources = Array.from(uniqueSources.values());
+    const retrievedPrimary = (primaryData ?? []) as ChunkRow[];
+    const seenIds = new Set(retrievedPrimary.map((c) => c.chunk_id));
+    const uniqueSupp = ((suppData ?? []) as ChunkRow[]).filter(
+      (c) => !seenIds.has(c.chunk_id)
+    );
+    const chunks = [...retrievedPrimary, ...uniqueSupp];
 
-        console.log(`Found ${chunks.length} relevant chunks for query`);
-      } else {
-        // Fallback: Try direct text search if RPC doesn't exist
-        const { data: fallbackChunks } = await supabase
-          .from('video_chunks')
-          .select('*')
-          .textSearch('content', query)
-          .limit(50);
+    const encoder = new TextEncoder();
 
-        if (fallbackChunks) {
-          contextChunks = fallbackChunks;
-          sources = fallbackChunks.map((chunk: VideoChunk) => ({
-            video_title: chunk.video_title,
-            channel_name: chunk.channel_name,
-            youtube_url: chunk.youtube_url,
-          }));
-        }
-      }
-    } catch (searchError) {
-      console.error('Video search error (continuing without context):', searchError);
-    }
-
-    // Build messages array with conversation history
-    const messages: Message[] = [];
-
-    // Add system prompt with context from video chunks
-    if (contextChunks.length > 0) {
-      const contextText = contextChunks
-        .map((chunk, i) => `[Source ${i + 1}: ${chunk.video_title} by ${chunk.channel_name}]\n${chunk.content}`)
-        .join('\n\n');
-
-      messages.push({
-        role: "user",
-        content: `You are a helpful AI assistant with access to a knowledge base of video transcripts. Your goal is to answer questions accurately using the provided context while being transparent about your sources.
-
-IMPORTANT INSTRUCTIONS:
-1. Use the video transcript excerpts below to answer the user's question
-2. Always cite which video(s) you're getting information from using the video title
-3. If multiple videos provide relevant information, synthesize them together
-4. If the context doesn't contain enough information to fully answer, admit this and suggest what additional context would help
-5. For factual claims, indicate the source video
-6. You can speak conversationally while staying grounded in the provided context
-
-Relevant Video Context:
-${contextText}
-
-Now, answer the user's question based on the above video transcripts.`,
+    // No matching knowledge — stream a friendly message so the UI renders it
+    if (chunks.length === 0) {
+      const noAnswer = `I don't have enough knowledge in the ${brainRow.name} brain to answer this question yet.`;
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "sources", sources: [] })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", text: noAnswer })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
       });
     }
 
-    // Add conversation history if provided (for long conversations)
-    if (conversationHistory && Array.isArray(conversationHistory)) {
-      // Take last 100 messages to manage context window (adjust as needed)
-      const recentHistory = conversationHistory.slice(-100);
-      for (const msg of recentHistory) {
-        if (msg.role === "user" || msg.role === "assistant") {
-          messages.push({
-            role: msg.role,
-            content: msg.content
-          });
-        }
+    // Build the knowledge-base context for the system prompt
+    const primaryChunks = chunks.filter((c) => c.is_primary_src);
+    const supplementaryChunks = chunks.filter((c) => !c.is_primary_src);
+
+    let context = "";
+    if (primaryChunks.length > 0) {
+      context += "## Primary Sources (cite first)\n\n";
+      for (const chunk of primaryChunks) {
+        context += `**[${chunk.video_title}]** (${chunk.channel_name})\n${chunk.content}\n\n`;
+      }
+    }
+    if (supplementaryChunks.length > 0) {
+      context += "## Supplementary Sources\n\n";
+      for (const chunk of supplementaryChunks) {
+        context += `**[${chunk.video_title}]** (${chunk.channel_name})\n${chunk.content}\n\n`;
       }
     }
 
-    // Add current query
-    messages.push({
-      role: "user",
-      content: query,
-    });
+    const systemPrompt = [
+      `You are the ${brainRow.name} assistant. Answer using ONLY the source content below. Never hallucinate.`,
+      `Cite video titles. Primary sources first, supplementary as "Also referenced from:".`,
+      `## Knowledge Base\n\n${context}`,
+    ].join("\n\n");
 
-    // Send sources first if we have them
-    if (sources.length > 0) {
-      const sourcesEvent = `data: ${JSON.stringify({ type: "sources", sources })}\n\n`;
-      // We'll send this after starting the stream
+    // Conversation history (if the client sends it) + current query
+    const messages: Anthropic.MessageParam[] = [];
+    if (Array.isArray(conversationHistory)) {
+      for (const msg of conversationHistory.slice(-40)) {
+        if ((msg.role === "user" || msg.role === "assistant") && typeof msg.content === "string") {
+          messages.push({ role: msg.role, content: msg.content });
+        }
+      }
     }
+    messages.push({ role: "user", content: query });
 
-    // Call Anthropic Claude API with extended settings for long conversations
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5",
-        max_tokens: 64000,
-        stream: true,
-        messages,
-      }),
-    });
+    const sources = chunks.map((chunk) => ({
+      video_title: chunk.video_title,
+      channel_name: chunk.channel_name,
+      youtube_url: chunk.timestamp_start
+        ? `https://www.youtube.com/watch?v=${chunk.youtube_video_id}&t=${Math.floor(chunk.timestamp_start)}`
+        : `https://www.youtube.com/watch?v=${chunk.youtube_video_id}`,
+      is_primary: chunk.is_primary_src,
+      similarity: Math.round(chunk.similarity * 1000) / 1000,
+    }));
 
-    if (!response.ok || !response.body) {
-      const errorText = await response.text().catch(() => `HTTP ${response.status}`);
-      return new Response(
-        `data: {"type":"error","error":"Claude API error: ${errorText}"}\n\n`,
-        { status: response.status || 500, headers: { "Content-Type": "text/event-stream" } }
-      );
-    }
-
-    // Transform Claude's streaming format to our SSE format
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          let buffer = "";
-          let sourcesSent = false;
+          // Sources are known before Claude responds — send them first
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "sources", sources })}\n\n`)
+          );
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              // Send done event
-              controller.enqueue(new TextEncoder().encode(`data: {"type":"done"}\n\n`));
-              controller.close();
-              break;
-            }
+          const claudeStream = anthropic.messages.stream({
+            model: ANSWER_MODEL,
+            max_tokens: 4096,
+            system: systemPrompt,
+            messages,
+          });
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const json = line.slice(6);
-                try {
-                  const parsed = JSON.parse(json);
-
-                  // Send sources before first text chunk
-                  if (sources.length > 0 && !sourcesSent && parsed.type === "content_block_start") {
-                    controller.enqueue(
-                      new TextEncoder().encode(`data: ${JSON.stringify({ type: "sources", sources })}\n\n`)
-                    );
-                    sourcesSent = true;
-                  }
-
-                  // Handle different event types from Claude
-                  if (parsed.type === "content_block_delta" && parsed.delta?.text) {
-                    controller.enqueue(
-                      new TextEncoder().encode(
-                        `data: {"type":"text","text":"${escapeJSON(parsed.delta.text)}"}\n\n`
-                      )
-                    );
-                  } else if (parsed.type === "message_stop") {
-                    controller.enqueue(new TextEncoder().encode(`data: {"type":"done"}\n\n`));
-                    controller.close();
-                    return;
-                  }
-                } catch {
-                  // Skip invalid JSON
-                }
-              }
+          for await (const event of claudeStream) {
+            if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "text", text: event.delta.text })}\n\n`)
+              );
             }
           }
-        } catch (error) {
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
+          controller.close();
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "Stream error";
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "error", error: errMsg })}\n\n`)
+          );
           controller.close();
         }
-      },
-      cancel() {
-        reader.cancel();
       },
     });
 
@@ -242,19 +223,7 @@ Now, answer the user's question based on the above video transcripts.`,
       },
     });
   } catch (err) {
-    return new Response(
-      `data: {"type":"error","error":"${escapeJSON(String(err))}"}\n\n`,
-      { status: 500, headers: { "Content-Type": "text/event-stream" } }
-    );
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return sseError(errMsg, 500);
   }
-}
-
-// Helper to escape JSON strings
-function escapeJSON(str: string): string {
-  return str
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t");
 }

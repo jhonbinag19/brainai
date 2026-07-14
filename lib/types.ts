@@ -41,19 +41,19 @@ export interface ChatSource {
   similarity?: number;
 }
 
-// Fetch brains from Supabase or use defaults
+// Fetch brains from the shared YouTube Brain database (brain_health view —
+// the same Supabase project the RAM Studio Brain pipeline indexes into)
 export async function getBrains(): Promise<Brain[]> {
   try {
-    const { getSupabaseClient } = await import("@/lib/supabase-client");
-    const supabase = getSupabaseClient();
+    const { getAdminSupabaseClient } = await import("@/lib/supabase-admin");
+    const supabase = getAdminSupabaseClient();
 
-    // Try to fetch from brain_stats view
     const { data, error } = await supabase
-      .from('brain_stats')
+      .from('brain_health')
       .select('*');
 
     if (!error && data && data.length > 0) {
-      return data;
+      return data as unknown as Brain[];
     }
   } catch (err) {
     console.error('Error fetching brains from Supabase:', err);
