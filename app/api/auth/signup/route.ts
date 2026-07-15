@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/lib/supabase-client';
 import { sendConfirmationEmail } from '@/lib/mailgun';
+import { createConfirmToken } from '@/lib/email-confirm';
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,8 +37,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Send confirmation email via Mailgun
-    const confirmUrl = `${nunoAiDomain}/auth/confirm?email=${encodeURIComponent(email)}`;
+    // Send confirmation email via Mailgun — the token lets /api/auth/confirm
+    // actually mark the account confirmed in Supabase Auth
+    const confirmUrl = `${nunoAiDomain}/auth/confirm?email=${encodeURIComponent(email)}&token=${createConfirmToken(email)}`;
     const emailSent = await sendConfirmationEmail(email, confirmUrl);
 
     if (!emailSent) {

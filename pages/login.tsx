@@ -148,6 +148,9 @@ export default function LoginPage() {
           setIsRateLimited(true);
           setRateLimitCountdown(RATE_LIMIT_MS / 1000);
           setError("Too many sign-in attempts. Please wait a few minutes.");
+        } else if (error.message.toLowerCase().includes("not confirmed")) {
+          setError("Your email isn't confirmed yet. Please click the link in your confirmation email, or use \"Forgot your password?\" below to verify your account.");
+          setCooldown(COOLDOWN_MS / 1000);
         } else if (error.message.includes("Invalid") || error.message.includes("credentials")) {
           setError("Incorrect email or password.");
           setCooldown(COOLDOWN_MS / 1000);

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
-import { getSupabaseClient } from '@/lib/supabase-client';
 
 export default function ConfirmPage() {
   const router = useRouter();
@@ -10,24 +9,32 @@ export default function ConfirmPage() {
 
   useEffect(() => {
     const confirmEmail = async () => {
-      const { email } = router.query;
+      const { email, token } = router.query;
 
-      if (!email || typeof email !== 'string') {
+      if (!email || typeof email !== 'string' || !token || typeof token !== 'string') {
         setStatus('error');
-        setMessage('Invalid confirmation link.');
+        setMessage('Invalid confirmation link. Please use the link from your most recent confirmation email, or reset your password to verify your account.');
         return;
       }
 
-      const supabase = getSupabaseClient();
-
       try {
-        // In a real app, you'd verify a token. For now, we'll just mark as confirmed
-        // You could store confirmation tokens in your database
-        setStatus('success');
-        setMessage('Email confirmed successfully! You can now sign in to your account.');
-      } catch (error) {
+        const res = await fetch('/api/auth/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, token }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          setStatus('success');
+          setMessage('Email confirmed successfully! You can now sign in to your account.');
+        } else {
+          setStatus('error');
+          setMessage(data.error || 'Failed to confirm email. The link may have expired.');
+        }
+      } catch {
         setStatus('error');
-        setMessage('Failed to confirm email. The link may have expired.');
+        setMessage('Failed to confirm email. Please try again.');
       }
     };
 

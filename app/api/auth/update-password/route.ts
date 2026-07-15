@@ -37,7 +37,10 @@ export async function POST(req: NextRequest) {
 
     // Get the user by email using admin client
     const supabase = getAdminSupabaseClient();
-    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
 
     if (listError) {
       console.error('Error listing users:', listError);
@@ -47,7 +50,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = users.find(u => u.email === email);
+    const user = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
 
     if (!user) {
       return NextResponse.json(
@@ -56,10 +59,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update user password using admin API
+    // Update user password using admin API. Completing a reset proves the
+    // user controls this inbox, so also confirm the email — otherwise an
+    // unconfirmed account still can't sign in even with the new password.
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       user.id,
-      { password }
+      { password, email_confirm: true }
     );
 
     if (updateError) {
